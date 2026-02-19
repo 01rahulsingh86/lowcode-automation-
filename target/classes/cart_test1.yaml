@@ -1,0 +1,15 @@
+env: stage
+
+steps:
+  - name: create_post
+    method: POST
+    path: /posts
+    body:
+      title: hello
+      body: world
+      userId: 1
+    assert:
+      id:
+        type: number
+        min: 1
+

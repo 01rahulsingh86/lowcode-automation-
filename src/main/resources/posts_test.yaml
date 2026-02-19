@@ -1,0 +1,19 @@
+env: https://jsonplaceholder.typicode.com
+
+steps:
+  - name: create_post
+    method: POST
+    path: /posts
+    body:
+      title: hello
+      body: world
+      userId: 2
+    capture:
+      postId: response.id
+
+  - name: get_post
+    method: GET
+    path: /posts/${postId}
+    retry: 3
+    waitMs: 1000
+

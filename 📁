@@ -1,0 +1,25 @@
+{
+  stage:	
+  baseUrl: https://reqres.in,
+  "item": [
+    {
+      "name": "Add To Cart",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "https://stage.api/cart/items"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{ \"userId\": \"{{userId}}\", \"items\": [{\"sku\":\"SKU1\",\"qty\":2}] }"
+        }
+      },
+      "response": [
+        {
+          "body": "{ \"cartId\": \"c1\", \"totalAmount\": 20.0 }"
+        }
+      ]
+    }
+  ]
+}
+

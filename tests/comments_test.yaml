@@ -1,0 +1,20 @@
+env: https://jsonplaceholder.typicode.com
+
+steps:
+  - name: create_comment
+    method: POST
+    path: /comments
+    body:
+      postId: 101
+      name: "Rahul"
+      email: "rahul@example.com"
+      body: "This is a comment"
+    capture:
+      commentId: response.id
+
+  - name: get_comment
+    method: GET
+    path: /comments/${commentId}
+    retry: 3
+    waitMs: 1000
+

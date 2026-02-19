@@ -1,0 +1,27 @@
+env: stage
+
+steps:
+  - name: create_post
+    method: POST
+    path: /posts
+    body:
+      title: hero
+      body: world
+      userId: 1
+    capture:
+      postId: response.id
+    assert:
+      id:
+        type: number
+        min: 1
+
+  - name: get_post
+    method: GET
+    path: /posts/${postId}
+    assert:
+      id:
+        type: number
+        min: 1
+      title:
+        type: string
+
