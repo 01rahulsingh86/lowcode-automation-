@@ -2,103 +2,54 @@ package engine;
 
 import io.restassured.RestAssured;
 import io.restassured.response.Response;
-import io.restassured.specification.RequestSpecification;
 
 import java.util.Map;
 
 public class HttpExecutor {
 
-    // Context shared across all steps (for variable chaining)
-    private static Map<String, Object> context;
-
-    public static void setContext(Map<String, Object> ctx) {
-        context = ctx;
-    }
-
-    // Replace ${var} placeholders with actual captured values
-    private static String resolveVariables(String value) {
-        if (value == null) return null;
-        if (context == null) return value;
-
-        for (String key : context.keySet()) {
-            Object val = context.get(key);
-            if (val == null) {
-                throw new RuntimeException("Variable '" + key + "' is null but used in step.");
-            }
-            value = value.replace("${" + key + "}", val.toString());
-        }
-        return value;
-    }
-
     /**
-     * Execute a single step.
+     * Execute HTTP request
      *
-     * @param step    YAML-defined step (method, path, body, capture, baseUrl)
-     * @param defaultBaseUrl Default base URL if step does not define one
-     * @return RestAssured Response
+     * @param url     Full URL
+     * @param method  GET/POST/PUT/DELETE
+     * @param headers Map of headers
+     * @param body    Request body as String (can be null)
+     * @return Response object from RestAssured
      */
-    public static Response execute(Map<String, Object> step, String defaultBaseUrl) throws InterruptedException {
-        String method = (String) step.get("method");
-        String path = resolveVariables((String) step.get("path"));
-        String baseUrlStep = step.containsKey("baseUrl") ? (String) step.get("baseUrl") : defaultBaseUrl;
+    public static Response execute(String url, String method, Map<String, Object> headers, String body) {
+        io.restassured.specification.RequestSpecification req = RestAssured.given();
 
-        // Resolve body variables
-        Object bodyObj = step.get("body");
-        if (bodyObj instanceof Map) {
-            Map<String, Object> bodyMap = (Map<String, Object>) bodyObj;
-            for (String key : bodyMap.keySet()) {
-                Object val = bodyMap.get(key);
-                if (val instanceof String) {
-                    bodyMap.put(key, resolveVariables((String) val));
-                }
-            }
-            bodyObj = bodyMap;
+        // Add headers
+        if (headers != null) {
+            headers.forEach((k, v) -> req.header(k, v.toString()));
         }
 
-        // Build request spec
-        RequestSpecification spec = RestAssured.given()
-                .baseUri(baseUrlStep)
-                .contentType("application/json")
-                .accept("application/json");
-
-        if (bodyObj != null) {
-            spec.body(bodyObj);
+        // Add body
+        if (body != null && !body.isEmpty()) {
+            req.body(body);
         }
 
-        // Optional retry for eventual consistency (e.g., cross-service GET)
-        int attempts = 0;
+        // Execute
         Response response;
-        int maxRetries = step.containsKey("retry") ? (Integer) step.get("retry") : 1;
-        int waitMs = step.containsKey("waitMs") ? (Integer) step.get("waitMs") : 500;
-
-        do {
-            response = spec.request(method, path);
-            if (response.statusCode() < 400) break; // success
-            Thread.sleep(waitMs);
-            attempts++;
-        } while (attempts < maxRetries);
-
-        // Debug logs
-        System.out.println("Response Status: " + response.statusCode());
-        System.out.println("Response Body: " + response.asString());
-        System.out.println("Response Content-Type: " + response.contentType());
-
-        // Capture variables
-        Map<String, Object> capture = (Map<String, Object>) step.get("capture");
-        if (capture != null) {
-            for (String key : capture.keySet()) {
-                String jsonPath = (String) capture.get(key);
-                Object val = response.jsonPath().get(jsonPath.replace("response.", ""));
-                if (val == null) {
-                    System.out.println("Warning: Captured value is null for key: " + key);
-                } else {
-                    context.put(key, val.toString());
-                    System.out.println("Captured: " + key + " = " + val);
-                }
-            }
+        switch (method.toUpperCase()) {
+            case "POST":
+                response = req.post(url);
+                break;
+            case "PUT":
+                response = req.put(url);
+                break;
+            case "DELETE":
+                response = req.delete(url);
+                break;
+            case "GET":
+            default:
+                response = req.get(url);
         }
+
+        // Log to console (optional)
+        System.out.println("Response Status: " + response.getStatusCode());
+        System.out.println("Response Body: " + response.getBody().asString());
 
         return response;
     }
 }
-

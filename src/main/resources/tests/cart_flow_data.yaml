@@ -1,0 +1,29 @@
+base_url: https://jsonplaceholder.typicode.com
+data_file: data/cart_flow_data.csv
+steps:
+  - name: add_to_cart
+    method: POST
+    path: /posts
+    headers:
+      Content-Type: "application/json"
+      X-Customer-Tag: "${customerTag}"
+    body_file: "payloads/add_to_cart.json"
+    schema_file: "schemas/post_response.schema.json"
+    capture:
+      cartId: response.id
+
+  - name: submit_order
+    method: POST
+    path: /posts
+    headers:
+      Content-Type: "application/json"
+      X-Cart-ID: "${cartId}"
+      X-Customer-Tag: "${customerTag}"
+    body_file: "payloads/submit_order.json"
+    schema_file: "schemas/post_response.schema.json"
+    capture:
+      orderId: response.id
+
+  - name: get_order
+    method: GET
+    path: /posts/${orderId}

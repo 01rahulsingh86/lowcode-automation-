@@ -1,0 +1,9 @@
+{
+  "cartId": 12345,
+  "product": {
+    "id": 987,
+    "name": "Laptop",
+    "quantity": 1
+  },
+  "sessionId": "${sessionId}"
+}

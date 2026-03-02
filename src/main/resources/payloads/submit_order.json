@@ -1,0 +1,8 @@
+{
+  "cartId": "${cartId}",
+  "paymentMethod": {
+    "type": "CARD",
+    "cardNumber": "4111111111111111"
+  },
+  "sessionId": "${sessionId}"
+}

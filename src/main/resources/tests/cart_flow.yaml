@@ -1,0 +1,24 @@
+base_url: https://jsonplaceholder.typicode.com
+steps:
+  - name: add_to_cart
+    method: POST
+    path: /posts
+    headers:
+      Content-Type: "application/json"
+    body_file: "payloads/add_to_cart.json"
+    capture:
+      cartId: response.id
+
+  - name: submit_order
+    method: POST
+    path: /posts
+    headers:
+      Content-Type: "application/json"
+      X-Cart-ID: "${cartId}"
+    body_file: "payloads/submit_order.json"
+    capture:
+      orderId: response.id
+
+  - name: get_order
+    method: GET
+    path: /posts/${orderId}
