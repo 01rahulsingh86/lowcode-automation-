@@ -47,6 +47,7 @@ public class TestEngine {
 
         String baseUrl = "";
         List<Map<String, Object>> steps;
+        Map<String, Object> defaultHeaders = Collections.emptyMap();
         List<Map<String, Object>> dataRows = Collections.singletonList(Collections.emptyMap());
         if (loaded instanceof List) {
             steps = (List<Map<String, Object>>) loaded;
@@ -55,6 +56,10 @@ public class TestEngine {
             Object baseUrlValue = root.get("base_url");
             if (baseUrlValue != null) {
                 baseUrl = baseUrlValue.toString();
+            }
+            Object defaultHeadersValue = root.get("headers");
+            if (defaultHeadersValue instanceof Map) {
+                defaultHeaders = (Map<String, Object>) defaultHeadersValue;
             }
             steps = (List<Map<String, Object>>) root.get("steps");
             dataRows = loadDataRows((String) root.get("data_file"));
@@ -84,7 +89,8 @@ public class TestEngine {
                 if (url == null && step.get("path") != null) {
                     url = baseUrl + step.get("path").toString();
                 }
-                Map<String, Object> headers = (Map<String, Object>) step.get("headers");
+                Map<String, Object> stepHeaders = (Map<String, Object>) step.get("headers");
+                Map<String, Object> headers = resolveHeaders(defaultHeaders, stepHeaders);
                 String body = null;
 
                 // If body is external file
@@ -105,7 +111,6 @@ public class TestEngine {
 
                 // Replace any ${variable} in URL, headers, body with runtime variables
                 url = replaceVariables(url);
-                if (headers != null) headers.replaceAll((k, v) -> replaceVariables(v.toString()));
                 if (body != null) body = replaceVariables(body);
 
                 // Execute HTTP call
@@ -170,6 +175,21 @@ public class TestEngine {
                 );
             }
         }
+    }
+
+    private static Map<String, Object> resolveHeaders(Map<String, Object> defaultHeaders, Map<String, Object> stepHeaders) {
+        if ((defaultHeaders == null || defaultHeaders.isEmpty()) && (stepHeaders == null || stepHeaders.isEmpty())) {
+            return null;
+        }
+
+        Map<String, Object> resolved = new LinkedHashMap<>();
+        if (defaultHeaders != null) {
+            defaultHeaders.forEach((k, v) -> resolved.put(k, v == null ? null : replaceVariables(v.toString())));
+        }
+        if (stepHeaders != null) {
+            stepHeaders.forEach((k, v) -> resolved.put(k, v == null ? null : replaceVariables(v.toString())));
+        }
+        return resolved;
     }
 
     private static List<Map<String, Object>> loadDataRows(String dataFile) throws Exception {
