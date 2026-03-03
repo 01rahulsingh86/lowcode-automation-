@@ -9,9 +9,14 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.UUID;
 
 public class TestEngine {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\$\\{([^}]+)}");
 
     // Runtime variables include both data-file values and captured values.
     private static final Map<String, Object> runtimeVariables = new HashMap<>();
@@ -89,8 +94,9 @@ public class TestEngine {
                 if (url == null && step.get("path") != null) {
                     url = baseUrl + step.get("path").toString();
                 }
+                Map<String, String> generatedValues = new HashMap<>();
                 Map<String, Object> stepHeaders = (Map<String, Object>) step.get("headers");
-                Map<String, Object> headers = resolveHeaders(defaultHeaders, stepHeaders);
+                Map<String, Object> headers = resolveHeaders(defaultHeaders, stepHeaders, generatedValues);
                 String body = null;
 
                 // If body is external file
@@ -110,8 +116,8 @@ public class TestEngine {
                 }
 
                 // Replace any ${variable} in URL, headers, body with runtime variables
-                url = replaceVariables(url);
-                if (body != null) body = replaceVariables(body);
+                url = replaceVariables(url, generatedValues);
+                if (body != null) body = replaceVariables(body, generatedValues);
 
                 // Execute HTTP call
                 long startNs = System.nanoTime();
@@ -150,7 +156,7 @@ public class TestEngine {
                         ? step.get("schema_file")
                         : step.get("schemaFile"));
                 if (schemaFile != null) {
-                    schemaFile = replaceVariables(schemaFile);
+                    schemaFile = replaceVariables(schemaFile, generatedValues);
                     try {
                         SchemaValidator.validateSchemaFile(schemaFile, response);
                         System.out.println("✔ Passed JSON Schema: " + stepName + " -> " + schemaFile);
@@ -177,17 +183,19 @@ public class TestEngine {
         }
     }
 
-    private static Map<String, Object> resolveHeaders(Map<String, Object> defaultHeaders, Map<String, Object> stepHeaders) {
+    private static Map<String, Object> resolveHeaders(Map<String, Object> defaultHeaders,
+                                                      Map<String, Object> stepHeaders,
+                                                      Map<String, String> generatedValues) {
         if ((defaultHeaders == null || defaultHeaders.isEmpty()) && (stepHeaders == null || stepHeaders.isEmpty())) {
             return null;
         }
 
         Map<String, Object> resolved = new LinkedHashMap<>();
         if (defaultHeaders != null) {
-            defaultHeaders.forEach((k, v) -> resolved.put(k, v == null ? null : replaceVariables(v.toString())));
+            defaultHeaders.forEach((k, v) -> resolved.put(k, v == null ? null : replaceVariables(v.toString(), generatedValues)));
         }
         if (stepHeaders != null) {
-            stepHeaders.forEach((k, v) -> resolved.put(k, v == null ? null : replaceVariables(v.toString())));
+            stepHeaders.forEach((k, v) -> resolved.put(k, v == null ? null : replaceVariables(v.toString(), generatedValues)));
         }
         return resolved;
     }
@@ -291,13 +299,70 @@ public class TestEngine {
 
     // Replace ${var} placeholders with runtime variable values
     private static String replaceVariables(String input) {
+        return replaceVariables(input, new HashMap<>());
+    }
+
+    private static String replaceVariables(String input, Map<String, String> generatedValues) {
         if (input == null) return null;
-        for (String key : runtimeVariables.keySet()) {
-            Object value = runtimeVariables.get(key);
-            if (value != null) {
-                input = input.replace("${" + key + "}", value.toString());
+        Matcher matcher = PLACEHOLDER_PATTERN.matcher(input);
+        StringBuffer sb = new StringBuffer();
+
+        while (matcher.find()) {
+            String key = matcher.group(1);
+            String replacement = resolvePlaceholderValue(key, generatedValues);
+            if (replacement == null) {
+                replacement = matcher.group(0);
             }
+            matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
         }
-        return input;
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+    private static String resolvePlaceholderValue(String key, Map<String, String> generatedValues) {
+        Object runtimeValue = runtimeVariables.get(key);
+        if (runtimeValue != null) {
+            return runtimeValue.toString();
+        }
+
+        if (generatedValues.containsKey(key)) {
+            return generatedValues.get(key);
+        }
+
+        String generated = switch (key) {
+            case "uuid" -> UUID.randomUUID().toString();
+            case "timestamp" -> String.valueOf(System.currentTimeMillis());
+            case "timestampSeconds" -> String.valueOf(System.currentTimeMillis() / 1000);
+            case "randomInt" -> String.valueOf(ThreadLocalRandom.current().nextInt(0, 1_000_000));
+            default -> generateRangedRandomInt(key);
+        };
+
+        if (generated != null) {
+            generatedValues.put(key, generated);
+        }
+        return generated;
+    }
+
+    private static String generateRangedRandomInt(String key) {
+        if (!key.startsWith("randomInt(") || !key.endsWith(")")) {
+            return null;
+        }
+
+        String args = key.substring("randomInt(".length(), key.length() - 1);
+        String[] parts = args.split(",");
+        if (parts.length != 2) {
+            return null;
+        }
+
+        try {
+            int min = Integer.parseInt(parts[0].trim());
+            int max = Integer.parseInt(parts[1].trim());
+            if (max < min) {
+                return null;
+            }
+            return String.valueOf(ThreadLocalRandom.current().nextInt(min, max + 1));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 }

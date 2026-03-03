@@ -5,9 +5,11 @@ A lightweight YAML-driven API test runner built with Java + Maven.
 ## Features
 - Run API test flows from YAML files
 - Support chained variables like `${orderId}`
+- Support common top-level headers plus step-level header overrides
 - Data-driven execution via `data_file` (`.csv`, `.json`, `.yaml`, `.yml`)
 - Load request payloads from external body files (`body_file` / `bodyFile`) including JSON and YAML
 - Capture response values using JSONPath (`capture`)
+- Built-in dynamic placeholders like `${uuid}`, `${timestamp}`, `${randomInt}`
 - Optional schema checks (`expectedSchema`)
 - Full JSON Schema validation via `schema_file` / `schemaFile`
 - Generate HTML report at `target/test-report.html`
@@ -24,6 +26,7 @@ A lightweight YAML-driven API test runner built with Java + Maven.
 ```text
 src/main/java/engine/
   TestEngine.java
+  CurlToYamlConverter.java
   HttpExecutor.java
   JsonUtils.java
   SchemaValidator.java
@@ -81,6 +84,27 @@ Run multiple YAML files:
 mvn -q -Dexec.mainClass=engine.TestEngine -Dexec.args="src/main/resources/tests/session_test.yaml src/main/resources/tests/order_flow.yaml" exec:java
 ```
 
+## Convert `.curl` Files To YAML Tests
+
+You can convert raw curl command files into runnable YAML test files.
+
+1. Put curl commands into files ending with `.curl` (one command per file), for example:
+`src/main/resources/curl/create_cart.curl`
+
+2. Run converter:
+```bash
+mvn -q -Dexec.mainClass=engine.CurlToYamlConverter -Dexec.args="src/main/resources/curl src/main/resources/tests/generated" exec:java
+```
+
+3. Run generated YAML tests:
+```bash
+mvn -q -Dexec.mainClass=engine.TestEngine -Dexec.args="src/main/resources/tests/generated/create_cart.yaml" exec:java
+```
+
+Notes:
+- Supported curl parts: URL, `-X/--request`, `-H/--header`, `-d/--data` (`--data-raw`, `--data-binary`, `--data-urlencode`)
+- If method is missing and body exists, method defaults to `POST`; otherwise `GET`
+
 ## YAML Format
 
 Top-level structure:
@@ -112,8 +136,24 @@ Supported step fields:
 
 Supported top-level fields:
 - `base_url`: base endpoint for `path`
+- `headers`: common headers applied to every step (step headers override same key)
 - `data_file`: optional data source for row-by-row execution (`.csv`, `.json`, `.yaml`, `.yml`)
 - `steps`: list of request steps
+
+Common header example:
+```yaml
+base_url: https://api.example.com
+headers:
+  Authorization: "Bearer ${token}"
+  X-Client-Id: "${clientId}"
+
+steps:
+  - name: create_order
+    method: POST
+    path: /orders
+    headers:
+      X-Trace-Id: "${uuid}" # added only for this step
+```
 
 ## Variable Chaining
 
@@ -134,6 +174,26 @@ data_file: data/cart_flow_data.csv
 headers:
   X-Customer-Tag: "${customerTag}"
 ```
+
+Built-in generated placeholders (no capture/data-file needed):
+- `${uuid}` -> random UUID
+- `${timestamp}` -> epoch milliseconds
+- `${timestampSeconds}` -> epoch seconds
+- `${randomInt}` -> random number from `0` to `999999`
+- `${randomInt(min,max)}` -> random number in inclusive range
+
+Example:
+```yaml
+headers:
+  X-Request-Id: "${uuid}"
+  X-Nonce: "${randomInt(1000,9999)}"
+  X-Request-Time: "${timestamp}"
+```
+
+Notes:
+- Generated placeholders are stable within one step (same value reused in URL/headers/body for that step)
+- New step generates new values
+- Captured/data-file values still take priority when names match
 
 ## Capture Nested JSON (Arrays/Objects)
 
@@ -217,6 +277,7 @@ Report includes:
 - method, URL, status, duration
 - collapsible request and response blocks (pretty JSON where applicable)
 - captured variable view per step
+- headers and captured maps shown with `:` format (JSON-style), not `=`
 
 ## Notes
 - The engine currently treats HTTP status `< 400` as pass unless schema validation fails.
@@ -318,3 +379,15 @@ Fix:
 `Report generated: target/test-report.html`
 - Open:
 `target/test-report.html`
+
+### 9) `Unknown host ...` while calling external API
+Cause:
+- DNS/network is unavailable from current environment
+
+Fix:
+- Verify internet/DNS access from your machine
+- Try:
+```bash
+curl -i https://jsonplaceholder.typicode.com/posts/1
+```
+- Re-run Maven command once connectivity is available

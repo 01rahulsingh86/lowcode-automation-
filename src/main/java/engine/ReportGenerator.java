@@ -130,7 +130,7 @@ public class ReportGenerator {
 
         int index = 1;
         for (ReportStep step : reportSteps) {
-            String prettyHeaders = prettyText(stringOrDash(step.requestHeaders));
+            String prettyHeaders = prettyText(asJsonOrDash(step.requestHeaders));
             String prettyRequestBody = prettyText(stringOrDash(step.requestBody));
             String prettyResponseBody = prettyText(stringOrDash(step.responseBody));
 
@@ -157,7 +157,7 @@ public class ReportGenerator {
 
             if (step.capturedVars != null && !step.capturedVars.isEmpty()) {
                 html.append("<details class=\"panel\"><summary>Captured</summary><pre>")
-                        .append(escapeHtml(step.capturedVars.toString())).append("</pre></details>");
+                        .append(escapeHtml(prettyText(asJsonOrDash(step.capturedVars)))).append("</pre></details>");
             }
             html.append("</td>");
             html.append("</tr>");
@@ -169,6 +169,17 @@ public class ReportGenerator {
 
     private static String stringOrDash(Object value) {
         return value == null ? "-" : value.toString();
+    }
+
+    private static String asJsonOrDash(Object value) {
+        if (value == null) {
+            return "-";
+        }
+        try {
+            return OBJECT_MAPPER.writeValueAsString(value);
+        } catch (Exception ignored) {
+            return value.toString();
+        }
     }
 
     private static String prettyText(String value) {
