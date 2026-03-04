@@ -10,6 +10,7 @@ A lightweight YAML-driven API test runner built with Java + Maven.
 - Load request payloads from external body files (`body_file` / `bodyFile`) including JSON and YAML
 - Capture response values using JSONPath (`capture`)
 - Built-in dynamic placeholders like `${uuid}`, `${timestamp}`, `${randomInt}`
+- Natural-language trigger runner to map prompts to one or more YAML flow files
 - Optional schema checks (`expectedSchema`)
 - Full JSON Schema validation via `schema_file` / `schemaFile`
 - Generate HTML report at `target/test-report.html`
@@ -27,6 +28,7 @@ A lightweight YAML-driven API test runner built with Java + Maven.
 src/main/java/engine/
   TestEngine.java
   CurlToYamlConverter.java
+  NLTriggerRunner.java
   HttpExecutor.java
   JsonUtils.java
   SchemaValidator.java
@@ -40,6 +42,7 @@ src/main/resources/
     order_flow.yaml
   data/
     cart_flow_data.csv
+  nl_triggers.yaml
   payloads/
     add_to_cart.json
     submit_order.json
@@ -83,6 +86,52 @@ Run multiple YAML files:
 ```bash
 mvn -q -Dexec.mainClass=engine.TestEngine -Dexec.args="src/main/resources/tests/session_test.yaml src/main/resources/tests/order_flow.yaml" exec:java
 ```
+
+Run all YAML files in a folder (example: smoke suite):
+```bash
+mvn -q -Dexec.mainClass=engine.TestEngine -Dexec.args="$(find src/main/resources/tests/smoke -type f \( -name '*.yaml' -o -name '*.yml' \) | sort | tr '\n' ' ')" exec:java
+```
+
+## Natural Language Trigger Runner
+
+You can map plain-English prompts to one or more YAML flow files (including chains).
+
+Default trigger config:
+`src/main/resources/nl_triggers.yaml`
+
+Run by prompt:
+```bash
+mvn -q -Dexec.mainClass=engine.NLTriggerRunner -Dexec.args="run smoke cart" exec:java
+```
+
+Run with custom config:
+```bash
+mvn -q -Dexec.mainClass=engine.NLTriggerRunner -Dexec.args="--config src/main/resources/nl_triggers.yaml run full cart chain" exec:java
+```
+
+Config format:
+```yaml
+triggers:
+  - name: smoke_cart
+    phrases:
+      - run smoke cart
+    keywords_all:
+      - smoke
+      - cart
+    files:
+      - src/main/resources/tests/cart_flow.yaml
+
+  - name: full_cart_chain
+    phrases:
+      - run full cart chain
+    files:
+      - src/main/resources/tests/cart_flow.yaml
+      - src/main/resources/tests/cart_flow_data.yaml
+```
+
+Matching rules:
+- A trigger matches if any phrase is contained in the prompt, or all `keywords_all` words are present, or any `keywords_any` word is present.
+- If multiple triggers match, their `files` are merged in order (duplicates removed).
 
 ## Convert `.curl` Files To YAML Tests
 

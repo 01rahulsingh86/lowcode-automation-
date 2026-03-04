@@ -1,0 +1,31 @@
+triggers:
+  - name: smoke_cart
+    phrases:
+      - run smoke cart
+      - execute cart smoke
+    keywords_all:
+      - smoke
+      - cart
+    files:
+      - src/main/resources/tests/cart_flow.yaml
+
+  - name: data_cart_regression
+    phrases:
+      - run cart regression
+      - run cart data flow
+    keywords_all:
+      - cart
+      - regression
+    files:
+      - src/main/resources/tests/cart_flow_data.yaml
+
+  - name: full_cart_chain
+    phrases:
+      - run full cart chain
+      - checkout chain
+    keywords_all:
+      - cart
+      - chain
+    files:
+      - src/main/resources/tests/cart_flow.yaml
+      - src/main/resources/tests/cart_flow_data.yaml
